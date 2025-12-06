@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 const userRoutes = require('./routes/userRoutes');
+const lessonRoutes = require('./routes/lessonRoutes');
 const sanitizeHtml = require('sanitize-html');
 
 const app = express();
@@ -71,6 +72,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api', userRoutes);
+app.use('/api', lessonRoutes);
 
 const startServer = async () => {
   try {
