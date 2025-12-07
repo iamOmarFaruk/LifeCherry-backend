@@ -26,6 +26,7 @@ const sanitizeLesson = (lesson) => {
     likes,
     likesCount,
     favoritesCount,
+    views,
     createdAt,
     updatedAt,
   } = doc;
@@ -48,6 +49,7 @@ const sanitizeLesson = (lesson) => {
     likes,
     likesCount,
     favoritesCount,
+    views,
     createdAt,
     updatedAt,
   };
@@ -196,6 +198,35 @@ exports.getLessonById = async (req, res) => {
     return res.status(200).json({ lesson: sanitizeLesson(lesson) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch lesson', error: error.message });
+  }
+};
+
+exports.recordLessonView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid lesson id' });
+    }
+
+    const lesson = await Lesson.findById(id).lean();
+    if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
+
+    const { email, role, isPremium } = await getRequesterContext(req);
+    if (!email) return res.status(401).json({ message: 'Login required to record view' });
+
+    const isOwner = email === lesson.creatorEmail;
+    if (lesson.visibility !== 'public' && !isOwner && role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    if (lesson.accessLevel === 'premium' && !isOwner && role !== 'admin' && !isPremium) {
+      return res.status(403).json({ message: 'Premium access required' });
+    }
+
+    const updated = await Lesson.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true }).lean();
+    return res.status(200).json({ views: updated.views });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to record view', error: error.message });
   }
 };
 
