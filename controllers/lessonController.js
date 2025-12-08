@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Lesson = require('../models/Lesson');
 const User = require('../models/User');
 const { logChange } = require('./auditController');
+const { moveToTrash } = require('./trashController');
 
 const visibilityOptions = new Set(['public', 'private', 'draft']);
 const accessLevelOptions = new Set(['free', 'premium']);
@@ -362,6 +363,19 @@ exports.deleteLesson = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
+    // Move to trash instead of permanently deleting
+    const lessonData = lesson.toObject ? lesson.toObject() : lesson;
+    await moveToTrash(
+      id,
+      'lesson',
+      lessonData,
+      email,
+      user?.name || req.user?.name || req.user?.displayName || 'Unknown',
+      lesson.creatorEmail,
+      lesson.creatorName
+    );
+
+    // Remove from Lesson collection
     await Lesson.deleteOne({ _id: id });
 
     await logChange({
@@ -372,11 +386,11 @@ exports.deleteLesson = async (req, res) => {
       targetId: id,
       targetOwnerEmail: lesson.creatorEmail,
       action: 'delete',
-      summary: `Deleted lesson "${lesson.title}"`,
-      metadata: { visibility: lesson.visibility, accessLevel: lesson.accessLevel },
+      summary: `Moved lesson "${lesson.title}" to trash`,
+      metadata: { visibility: lesson.visibility, accessLevel: lesson.accessLevel, movedToTrash: true },
     });
 
-    return res.status(200).json({ message: 'Lesson deleted' });
+    return res.status(200).json({ message: 'Lesson moved to trash' });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to delete lesson', error: error.message });
   }

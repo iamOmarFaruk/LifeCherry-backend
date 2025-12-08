@@ -7,6 +7,7 @@ require('dotenv').config();
 const userRoutes = require('./routes/userRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
 const auditRoutes = require('./routes/auditRoutes');
+const trashRoutes = require('./routes/trashRoutes');
 const sanitizeHtml = require('sanitize-html');
 
 const app = express();
@@ -75,6 +76,7 @@ app.get('/health', (req, res) => {
 app.use('/api', userRoutes);
 app.use('/api', lessonRoutes);
 app.use('/api', auditRoutes);
+app.use('/api', trashRoutes);
 
 const startServer = async () => {
   try {
