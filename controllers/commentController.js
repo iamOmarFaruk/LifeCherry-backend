@@ -128,6 +128,19 @@ exports.createComment = async (req, res) => {
   }
 };
 
+// Helper function to count all replies recursively
+function countAllReplies(replies) {
+  if (!replies || replies.length === 0) return 0;
+  
+  let count = replies.length;
+  for (const reply of replies) {
+    if (reply.replies && reply.replies.length > 0) {
+      count += countAllReplies(reply.replies);
+    }
+  }
+  return count;
+}
+
 // Get comments for a lesson
 exports.getComments = async (req, res) => {
   try {
@@ -140,17 +153,26 @@ exports.getComments = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const [comments, total] = await Promise.all([
+    const [comments, commentCount] = await Promise.all([
       Comment.find({ lessonId }).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
       Comment.countDocuments({ lessonId }),
     ]);
 
+    // Calculate total including all replies
+    let totalWithReplies = 0;
+    const allComments = await Comment.find({ lessonId }).lean();
+    for (const comment of allComments) {
+      totalWithReplies += 1; // Count the comment itself
+      totalWithReplies += countAllReplies(comment.replies);
+    }
+
     return res.status(200).json({
       comments,
-      total,
+      total: totalWithReplies,
+      commentCount: commentCount,
       page: parseInt(page),
       limit: parseInt(limit),
-      pages: Math.ceil(total / limit),
+      pages: Math.ceil(commentCount / limit),
     });
   } catch (error) {
     console.error('Error fetching comments:', error);
