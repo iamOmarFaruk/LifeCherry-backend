@@ -237,32 +237,48 @@ exports.getLessonById = async (req, res) => {
 exports.recordLessonView = async (req, res) => {
   try {
     const { id } = req.params;
+    const { email, role } = await getRequesterContext(req);
+    
+    console.log('[View Recording] Request received:', { lessonId: id, userEmail: email, userRole: role });
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log('[View Recording] ❌ Invalid lesson ID:', id);
       return res.status(400).json({ message: 'Invalid lesson id' });
     }
 
     const lesson = await Lesson.findById(id).lean();
-    if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
+    if (!lesson) {
+      console.log('[View Recording] ❌ Lesson not found:', id);
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
 
-    const { email, role, isPremium, user } = await getRequesterContext(req);
-    if (!email) return res.status(401).json({ message: 'Login required to record view' });
+    const { isPremium, user } = await getRequesterContext(req);
+    if (!email) {
+      console.log('[View Recording] ❌ Not authenticated');
+      return res.status(401).json({ message: 'Login required to record view' });
+    }
 
     // Prevent recording views for own lessons
     const isOwner = email === lesson.creatorEmail;
     if (isOwner) {
+      console.log('[View Recording] ❌ User is lesson creator, cannot record own post view');
       return res.status(403).json({ message: 'Cannot record view on your own lesson' });
     }
 
     if (lesson.visibility !== 'public' && !isOwner && role !== 'admin') {
+      console.log('[View Recording] ❌ Lesson not public and user is not owner/admin');
       return res.status(403).json({ message: 'Forbidden' });
     }
 
     if (lesson.accessLevel === 'premium' && !isOwner && role !== 'admin' && !isPremium) {
+      console.log('[View Recording] ❌ Premium lesson and user not premium');
       return res.status(403).json({ message: 'Premium access required' });
     }
 
     // Increment view count
+    console.log('[View Recording] ✅ Recording view for lesson:', lesson.title);
     const updated = await Lesson.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true }).lean();
+    console.log('[View Recording] ✅ View recorded. New view count:', updated.views);
 
     // Log the view activity
     await logChange({
@@ -280,9 +296,11 @@ exports.recordLessonView = async (req, res) => {
         totalViews: updated.views
       },
     });
+    console.log('[View Recording] ✅ Activity logged');
 
     return res.status(200).json({ views: updated.views });
   } catch (error) {
+    console.error('[View Recording] ❌ Error:', error.message);
     return res.status(500).json({ message: 'Failed to record view', error: error.message });
   }
 };
