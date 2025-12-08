@@ -244,10 +244,15 @@ exports.recordLessonView = async (req, res) => {
     const lesson = await Lesson.findById(id).lean();
     if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
 
-    const { email, role, isPremium } = await getRequesterContext(req);
+    const { email, role, isPremium, user } = await getRequesterContext(req);
     if (!email) return res.status(401).json({ message: 'Login required to record view' });
 
+    // Prevent recording views for own lessons
     const isOwner = email === lesson.creatorEmail;
+    if (isOwner) {
+      return res.status(403).json({ message: 'Cannot record view on your own lesson' });
+    }
+
     if (lesson.visibility !== 'public' && !isOwner && role !== 'admin') {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -256,7 +261,26 @@ exports.recordLessonView = async (req, res) => {
       return res.status(403).json({ message: 'Premium access required' });
     }
 
+    // Increment view count
     const updated = await Lesson.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true }).lean();
+
+    // Log the view activity
+    await logChange({
+      actorEmail: email,
+      actorName: user?.name || 'User',
+      actorRole: role,
+      targetType: 'lesson',
+      targetId: id,
+      targetOwnerEmail: lesson.creatorEmail,
+      action: 'view',
+      summary: `Viewed lesson "${lesson.title}"`,
+      metadata: { 
+        lessonTitle: lesson.title,
+        category: lesson.category,
+        totalViews: updated.views
+      },
+    });
+
     return res.status(200).json({ views: updated.views });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to record view', error: error.message });
