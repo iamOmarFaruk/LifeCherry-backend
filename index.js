@@ -9,7 +9,7 @@ const lessonRoutes = require('./routes/lessonRoutes');
 const sanitizeHtml = require('sanitize-html');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5050;
 const allowedOrigins = [process.env.CLIENT_URL].filter(Boolean);
 
 const sanitizePayload = (obj) => {
@@ -76,14 +76,23 @@ app.use('/api', lessonRoutes);
 
 const startServer = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not set in the environment');
+    }
+
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
     console.log('Connected to MongoDB');
 
     app.listen(PORT, () => {
       console.log(`LifeCherry server running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to connect to MongoDB', error);
+    console.error(
+      'Failed to connect to MongoDB. Verify MONGODB_URI and that your current IP is whitelisted in Atlas.',
+      error
+    );
     process.exit(1);
   }
 };
