@@ -8,6 +8,7 @@ const userRoutes = require('./routes/userRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const trashRoutes = require('./routes/trashRoutes');
+const commentRoutes = require('./routes/commentRoutes');
 const sanitizeHtml = require('sanitize-html');
 
 const app = express();
@@ -77,6 +78,7 @@ app.use('/api', userRoutes);
 app.use('/api', lessonRoutes);
 app.use('/api', auditRoutes);
 app.use('/api', trashRoutes);
+app.use('/api', commentRoutes);
 
 const startServer = async () => {
   try {
