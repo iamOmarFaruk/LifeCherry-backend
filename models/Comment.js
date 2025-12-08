@@ -9,20 +9,23 @@ const reactionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Define reply schema with self-reference
 const replySchema = new mongoose.Schema(
   {
-    _id: mongoose.Schema.Types.ObjectId,
-    userEmail: String,
-    userName: String,
-    userPhoto: String,
-    content: String,
+    userEmail: { type: String, required: true },
+    userName: { type: String, required: true },
+    userPhoto: { type: String, default: '' },
+    content: { type: String, required: true },
     reactions: [reactionSchema],
-    replies: [this], // Support 3-level nesting
+    replies: [], // Will be populated with same structure
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
   { _id: true }
 );
+
+// Enable nested replies
+replySchema.add({ replies: [replySchema] });
 
 const commentSchema = new mongoose.Schema(
   {

@@ -1,8 +1,19 @@
 const mongoose = require('mongoose');
 const Comment = require('../models/Comment');
 const Lesson = require('../models/Lesson');
-const { getRequesterContext } = require('../middleware/verifyToken');
-const { logChange } = require('./userController');
+const User = require('../models/User');
+const { logChange } = require('./auditController');
+
+// Helper function to get user context from request
+async function getRequesterContext(req) {
+  const email = req.user?.email?.toLowerCase();
+  if (!email) {
+    return { email: null, user: null };
+  }
+  
+  const user = await User.findOne({ email }).lean();
+  return { email, user };
+}
 
 // Create a comment
 exports.createComment = async (req, res) => {
@@ -32,7 +43,7 @@ exports.createComment = async (req, res) => {
       lessonId,
       userEmail: email,
       userName: user?.name || 'User',
-      userPhoto: user?.photo || '',
+      userPhoto: user?.photoURL || '',
       content: content.trim(),
       reactions: [],
       replies: [],
@@ -256,7 +267,7 @@ exports.addReply = async (req, res) => {
       _id: new mongoose.Types.ObjectId(),
       userEmail: email,
       userName: user?.name || 'User',
-      userPhoto: user?.photo || '',
+      userPhoto: user?.photoURL || '',
       content: content.trim(),
       reactions: [],
       replies: [],
@@ -303,7 +314,7 @@ exports.addNestedReply = async (req, res) => {
       _id: new mongoose.Types.ObjectId(),
       userEmail: email,
       userName: user?.name || 'User',
-      userPhoto: user?.photo || '',
+      userPhoto: user?.photoURL || '',
       content: content.trim(),
       reactions: [],
       replies: [],
@@ -357,7 +368,7 @@ exports.addDeepNestedReply = async (req, res) => {
       _id: new mongoose.Types.ObjectId(),
       userEmail: email,
       userName: user?.name || 'User',
-      userPhoto: user?.photo || '',
+      userPhoto: user?.photoURL || '',
       content: content.trim(),
       reactions: [],
       replies: [], // Max 3 levels - no deeper replies allowed
