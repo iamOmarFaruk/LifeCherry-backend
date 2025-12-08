@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { logChange } = require('./auditController');
 
 const sanitizeUser = (user) => {
   if (!user) return null;
@@ -77,6 +78,21 @@ exports.updateUserProfile = async (req, res) => {
     const user = await User.findOneAndUpdate({ email }, { $set: update }, { new: true }).lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    const actorEmail = req.user?.email?.toLowerCase();
+    const actorRole = actorEmail === user.email ? 'user' : req.user?.role || 'admin';
+
+    await logChange({
+      actorEmail,
+      actorName: req.user?.name || req.user?.displayName,
+      actorRole,
+      targetType: 'user',
+      targetId: user._id?.toString(),
+      targetOwnerEmail: user.email,
+      action: 'update',
+      summary: 'Updated profile',
+      metadata: { fields: Object.keys(update) },
+    });
+
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to update user', error: error.message });
@@ -128,6 +144,18 @@ exports.updateUserRole = async (req, res) => {
     const user = await User.findOneAndUpdate({ email }, { $set: { role } }, { new: true }).lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    await logChange({
+      actorEmail: req.user?.email?.toLowerCase(),
+      actorName: req.user?.name || req.user?.displayName,
+      actorRole: req.user?.role || 'admin',
+      targetType: 'user',
+      targetId: user._id?.toString(),
+      targetOwnerEmail: user.email,
+      action: 'update-role',
+      summary: `Set role to ${role}`,
+      metadata: { role },
+    });
+
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to update role', error: error.message });
@@ -146,6 +174,18 @@ exports.updateUserPremium = async (req, res) => {
 
     const user = await User.findOneAndUpdate({ email }, { $set: { isPremium } }, { new: true }).lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    await logChange({
+      actorEmail: req.user?.email?.toLowerCase(),
+      actorName: req.user?.name || req.user?.displayName,
+      actorRole: req.user?.role || 'admin',
+      targetType: 'user',
+      targetId: user._id?.toString(),
+      targetOwnerEmail: user.email,
+      action: 'update-premium',
+      summary: `Set premium to ${isPremium}`,
+      metadata: { isPremium },
+    });
 
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (error) {

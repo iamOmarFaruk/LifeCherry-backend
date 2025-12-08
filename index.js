@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 const userRoutes = require('./routes/userRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 const sanitizeHtml = require('sanitize-html');
 
 const app = express();
@@ -73,6 +74,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api', userRoutes);
 app.use('/api', lessonRoutes);
+app.use('/api', auditRoutes);
 
 const startServer = async () => {
   try {

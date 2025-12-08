@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Lesson = require('../models/Lesson');
 const User = require('../models/User');
+const { logChange } = require('./auditController');
 
 const visibilityOptions = new Set(['public', 'private', 'draft']);
 const accessLevelOptions = new Set(['free', 'premium']);
@@ -109,6 +110,18 @@ exports.createLesson = async (req, res) => {
       creatorPhoto: user.photoURL || req.user?.picture || '',
       isFeatured: role === 'admin' ? !!req.body.isFeatured : false,
       isReviewed: role === 'admin' ? !!req.body.isReviewed : false,
+    });
+
+    await logChange({
+      actorEmail: email,
+      actorName: user.name || req.user?.name || req.user?.displayName,
+      actorRole: role,
+      targetType: 'lesson',
+      targetId: lesson._id.toString(),
+      targetOwnerEmail: lesson.creatorEmail,
+      action: 'create',
+      summary: `Created lesson "${lesson.title}" (${lesson.accessLevel})`,
+      metadata: { visibility: lesson.visibility, accessLevel: lesson.accessLevel },
     });
 
     return res.status(201).json({ lesson: sanitizeLesson(lesson) });
@@ -252,7 +265,7 @@ exports.getLessonsByUser = async (req, res) => {
     const targetEmail = req.params.email?.toLowerCase();
     if (!targetEmail) return res.status(400).json({ message: 'Email is required' });
 
-    const { email, role } = await getRequesterContext(req);
+    const { email, role, user } = await getRequesterContext(req);
     const isOwner = email === targetEmail;
 
     if (!isOwner && role !== 'admin') {
@@ -313,6 +326,19 @@ exports.updateLesson = async (req, res) => {
     }
 
     const updated = await Lesson.findByIdAndUpdate(id, { $set: updates }, { new: true }).lean();
+
+    await logChange({
+      actorEmail: email,
+      actorName: user?.name || req.user?.name || req.user?.displayName,
+      actorRole: role,
+      targetType: 'lesson',
+      targetId: id,
+      targetOwnerEmail: lesson.creatorEmail,
+      action: 'update',
+      summary: `Updated lesson "${lesson.title}"`,
+      metadata: { fields: Object.keys(updates) },
+    });
+
     return res.status(200).json({ lesson: sanitizeLesson(updated) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to update lesson', error: error.message });
@@ -329,7 +355,7 @@ exports.deleteLesson = async (req, res) => {
     const lesson = await Lesson.findById(id).lean();
     if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
 
-    const { email, role } = await getRequesterContext(req);
+    const { email, role, user } = await getRequesterContext(req);
     const isOwner = email && email === lesson.creatorEmail;
 
     if (!isOwner && role !== 'admin') {
@@ -337,6 +363,19 @@ exports.deleteLesson = async (req, res) => {
     }
 
     await Lesson.deleteOne({ _id: id });
+
+    await logChange({
+      actorEmail: email,
+      actorName: user?.name || req.user?.name || req.user?.displayName,
+      actorRole: role,
+      targetType: 'lesson',
+      targetId: id,
+      targetOwnerEmail: lesson.creatorEmail,
+      action: 'delete',
+      summary: `Deleted lesson "${lesson.title}"`,
+      metadata: { visibility: lesson.visibility, accessLevel: lesson.accessLevel },
+    });
+
     return res.status(200).json({ message: 'Lesson deleted' });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to delete lesson', error: error.message });
