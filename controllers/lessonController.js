@@ -119,7 +119,7 @@ exports.createLesson = async (req, res) => {
 
 exports.listLessons = async (req, res) => {
   try {
-    const { role } = await getRequesterContext(req);
+    const { role, email, isPremium } = await getRequesterContext(req);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
     const skip = (page - 1) * limit;
@@ -128,16 +128,33 @@ exports.listLessons = async (req, res) => {
     const filters = {};
 
     const requestedVisibility = req.query.visibility;
-    if (requestedVisibility === 'all' && role === 'admin') {
+    if (role === 'admin' && requestedVisibility === 'all') {
       // admin can see everything
-    } else if (visibilityOptions.has(requestedVisibility)) {
+    } else if (role === 'admin' && visibilityOptions.has(requestedVisibility)) {
       filters.visibility = requestedVisibility;
     } else {
+      // non-admins only see public lessons regardless of query
       filters.visibility = 'public';
     }
 
-    if (req.query.accessLevel && accessLevelOptions.has(req.query.accessLevel)) {
-      filters.accessLevel = req.query.accessLevel;
+    // Access gating
+    const requestedAccess = req.query.accessLevel;
+    if (!email) {
+      // Guests: only public free lessons regardless of query params
+      filters.accessLevel = 'free';
+    } else if (role === 'admin') {
+      if (requestedAccess && accessLevelOptions.has(requestedAccess)) {
+        filters.accessLevel = requestedAccess;
+      }
+    } else if (isPremium) {
+      if (requestedAccess && accessLevelOptions.has(requestedAccess)) {
+        filters.accessLevel = requestedAccess;
+      }
+    } else {
+      // Logged-in free users can see both free and premium (as locked in UI), so no filter
+      if (requestedAccess && accessLevelOptions.has(requestedAccess)) {
+        filters.accessLevel = requestedAccess;
+      }
     }
 
     if (req.query.category) filters.category = req.query.category;
