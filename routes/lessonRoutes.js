@@ -7,6 +7,8 @@ const {
   updateLesson,
   deleteLesson,
   recordLessonView,
+  toggleLike,
+  toggleFavorite,
 } = require('../controllers/lessonController');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
@@ -18,6 +20,8 @@ router.get('/lessons', optionalAuth, listLessons);
 router.get('/lessons/user/:email', verifyToken, getLessonsByUser);
 router.get('/lessons/:id', optionalAuth, getLessonById);
 router.post('/lessons/:id/view', verifyToken, recordLessonView);
+router.post('/lessons/:id/like', verifyToken, toggleLike);
+router.post('/lessons/:id/favorite', verifyToken, toggleFavorite);
 router.patch('/lessons/:id', verifyToken, updateLesson);
 router.delete('/lessons/:id', verifyToken, deleteLesson);
 

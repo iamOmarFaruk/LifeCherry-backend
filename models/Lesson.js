@@ -24,6 +24,7 @@ const lessonSchema = new mongoose.Schema(
     isReviewed: { type: Boolean, default: false },
     likes: { type: [String], default: [] },
     likesCount: { type: Number, default: 0 },
+    favorites: { type: [String], default: [] },
     favoritesCount: { type: Number, default: 0 },
     views: { type: Number, default: 0 },
   },

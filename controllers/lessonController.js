@@ -27,6 +27,7 @@ const sanitizeLesson = (lesson) => {
     isReviewed,
     likes,
     likesCount,
+    favorites,
     favoritesCount,
     views,
     createdAt,
@@ -50,6 +51,7 @@ const sanitizeLesson = (lesson) => {
     isReviewed,
     likes,
     likesCount,
+    favorites,
     favoritesCount,
     views,
     createdAt,
@@ -393,5 +395,129 @@ exports.deleteLesson = async (req, res) => {
     return res.status(200).json({ message: 'Lesson moved to trash' });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to delete lesson', error: error.message });
+  }
+};
+
+// Toggle like on a lesson
+exports.toggleLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, role, user } = await getRequesterContext(req);
+
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid lesson ID' });
+    }
+
+    const lesson = await Lesson.findById(id);
+    if (!lesson) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    // Prevent self-liking
+    if (email === lesson.creatorEmail) {
+      return res.status(403).json({ message: 'You cannot like your own lesson' });
+    }
+
+    const likes = lesson.likes || [];
+    const userEmail = email.toLowerCase();
+    const hasLiked = likes.includes(userEmail);
+
+    if (hasLiked) {
+      // Remove like
+      lesson.likes = likes.filter((e) => e !== userEmail);
+      lesson.likesCount = Math.max(0, lesson.likesCount - 1);
+    } else {
+      // Add like
+      lesson.likes.push(userEmail);
+      lesson.likesCount = (lesson.likesCount || 0) + 1;
+    }
+
+    await lesson.save();
+
+    await logChange({
+      actorEmail: email,
+      actorName: user?.name || req.user?.name || req.user?.displayName || 'User',
+      actorRole: role,
+      targetType: 'lesson',
+      targetId: id,
+      targetOwnerEmail: lesson.creatorEmail,
+      action: hasLiked ? 'unlike' : 'like',
+      summary: `${hasLiked ? 'Removed like from' : 'Liked'} lesson "${lesson.title}"`,
+    });
+
+    return res.status(200).json({
+      message: hasLiked ? 'Like removed' : 'Like added',
+      lesson: sanitizeLesson(lesson),
+      isLiked: !hasLiked,
+      likesCount: lesson.likesCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to toggle like', error: error.message });
+  }
+};
+
+// Toggle favorite on a lesson
+exports.toggleFavorite = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, role, user } = await getRequesterContext(req);
+
+    if (!email) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid lesson ID' });
+    }
+
+    const lesson = await Lesson.findById(id);
+    if (!lesson) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    // Prevent self-favoriting
+    if (email === lesson.creatorEmail) {
+      return res.status(403).json({ message: 'You cannot favorite your own lesson' });
+    }
+
+    const favorites = lesson.favorites || [];
+    const userEmail = email.toLowerCase();
+    const hasFavorited = favorites.includes(userEmail);
+
+    if (hasFavorited) {
+      // Remove favorite
+      lesson.favorites = favorites.filter((e) => e !== userEmail);
+      lesson.favoritesCount = Math.max(0, lesson.favoritesCount - 1);
+    } else {
+      // Add favorite
+      lesson.favorites.push(userEmail);
+      lesson.favoritesCount = (lesson.favoritesCount || 0) + 1;
+    }
+
+    await lesson.save();
+
+    await logChange({
+      actorEmail: email,
+      actorName: user?.name || req.user?.name || req.user?.displayName || 'User',
+      actorRole: role,
+      targetType: 'lesson',
+      targetId: id,
+      targetOwnerEmail: lesson.creatorEmail,
+      action: hasFavorited ? 'unfavorite' : 'favorite',
+      summary: `${hasFavorited ? 'Removed from' : 'Saved to'} favorites: "${lesson.title}"`,
+    });
+
+    return res.status(200).json({
+      message: hasFavorited ? 'Removed from favorites' : 'Added to favorites',
+      lesson: sanitizeLesson(lesson),
+      isFavorited: !hasFavorited,
+      favoritesCount: lesson.favoritesCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to toggle favorite', error: error.message });
   }
 };
