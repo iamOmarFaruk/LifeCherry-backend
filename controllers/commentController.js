@@ -3,6 +3,8 @@ const Comment = require('../models/Comment');
 const Lesson = require('../models/Lesson');
 const User = require('../models/User');
 const { logChange } = require('./auditController');
+const validator = require('validator');
+const xss = require('xss');
 
 // Helper function to get user context from request
 async function getRequesterContext(req) {
@@ -15,19 +17,71 @@ async function getRequesterContext(req) {
   return { email, user };
 }
 
+// Helper function to sanitize and validate content
+function sanitizeContent(content) {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+  
+  // Trim whitespace
+  let sanitized = content.trim();
+  
+  // Remove XSS attempts
+  sanitized = xss(sanitized, {
+    whiteList: {}, // No HTML tags allowed
+    stripIgnoreTag: true,
+    stripIgnoreTagBody: ['script', 'style']
+  });
+  
+  // Additional cleanup - remove any remaining HTML entities
+  sanitized = validator.stripLow(sanitized);
+  
+  // Escape special characters
+  sanitized = validator.escape(sanitized);
+  
+  return sanitized;
+}
+
+// Validate content length and format
+function validateContent(content) {
+  const errors = [];
+  
+  if (!content || content.trim().length === 0) {
+    errors.push('Content cannot be empty');
+  }
+  
+  if (content.length > 2000) {
+    errors.push('Content is too long (max 2000 characters)');
+  }
+  
+  if (content.length < 1) {
+    errors.push('Content is too short');
+  }
+  
+  return errors;
+}
+
 // Create a comment
 exports.createComment = async (req, res) => {
   try {
     const { lessonId } = req.params;
-    const { content } = req.body;
+    let { content } = req.body;
     const { email, user } = await getRequesterContext(req);
 
     if (!email) {
       return res.status(401).json({ message: 'Login required' });
     }
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Comment content is required' });
+    // Validate content before sanitization
+    const validationErrors = validateContent(content);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: validationErrors[0] });
+    }
+
+    // Sanitize content
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) {
+      return res.status(400).json({ message: 'Invalid content' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(lessonId)) {
@@ -44,7 +98,7 @@ exports.createComment = async (req, res) => {
       userEmail: email,
       userName: user?.name || 'User',
       userPhoto: user?.photoURL || '',
-      content: content.trim(),
+      content: sanitizedContent,
       reactions: [],
       replies: [],
     });
@@ -108,11 +162,23 @@ exports.getComments = async (req, res) => {
 exports.updateComment = async (req, res) => {
   try {
     const { commentId } = req.params;
-    const { content } = req.body;
+    let { content } = req.body;
     const { email } = await getRequesterContext(req);
 
     if (!email) {
       return res.status(401).json({ message: 'Login required' });
+    }
+
+    // Validate content before sanitization
+    const validationErrors = validateContent(content);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: validationErrors[0] });
+    }
+
+    // Sanitize content
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) {
+      return res.status(400).json({ message: 'Invalid content' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(commentId)) {
@@ -128,11 +194,7 @@ exports.updateComment = async (req, res) => {
       return res.status(403).json({ message: 'Can only edit your own comments' });
     }
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Comment content is required' });
-    }
-
-    comment.content = content.trim();
+    comment.content = sanitizedContent;
     comment.updatedAt = Date.now();
     await comment.save();
 
@@ -243,15 +305,23 @@ exports.toggleCommentReaction = async (req, res) => {
 exports.addReply = async (req, res) => {
   try {
     const { commentId } = req.params;
-    const { content } = req.body;
+    let { content } = req.body;
     const { email, user } = await getRequesterContext(req);
 
     if (!email) {
       return res.status(401).json({ message: 'Login required' });
     }
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Reply content is required' });
+    // Validate content before sanitization
+    const validationErrors = validateContent(content);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: validationErrors[0] });
+    }
+
+    // Sanitize content
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) {
+      return res.status(400).json({ message: 'Invalid content' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(commentId)) {
@@ -268,7 +338,7 @@ exports.addReply = async (req, res) => {
       userEmail: email,
       userName: user?.name || 'User',
       userPhoto: user?.photoURL || '',
-      content: content.trim(),
+      content: sanitizedContent,
       reactions: [],
       replies: [],
       createdAt: Date.now(),
@@ -289,15 +359,23 @@ exports.addReply = async (req, res) => {
 exports.addNestedReply = async (req, res) => {
   try {
     const { commentId, replyId } = req.params;
-    const { content } = req.body;
+    let { content } = req.body;
     const { email, user } = await getRequesterContext(req);
 
     if (!email) {
       return res.status(401).json({ message: 'Login required' });
     }
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Reply content is required' });
+    // Validate content before sanitization
+    const validationErrors = validateContent(content);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: validationErrors[0] });
+    }
+
+    // Sanitize content
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) {
+      return res.status(400).json({ message: 'Invalid content' });
     }
 
     const comment = await Comment.findById(commentId);
@@ -315,7 +393,7 @@ exports.addNestedReply = async (req, res) => {
       userEmail: email,
       userName: user?.name || 'User',
       userPhoto: user?.photoURL || '',
-      content: content.trim(),
+      content: sanitizedContent,
       reactions: [],
       replies: [],
       createdAt: Date.now(),
@@ -338,15 +416,23 @@ exports.addNestedReply = async (req, res) => {
 exports.addDeepNestedReply = async (req, res) => {
   try {
     const { commentId, replyId, nestedReplyId } = req.params;
-    const { content } = req.body;
+    let { content } = req.body;
     const { email, user } = await getRequesterContext(req);
 
     if (!email) {
       return res.status(401).json({ message: 'Login required' });
     }
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Reply content is required' });
+    // Validate content before sanitization
+    const validationErrors = validateContent(content);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: validationErrors[0] });
+    }
+
+    // Sanitize content
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) {
+      return res.status(400).json({ message: 'Invalid content' });
     }
 
     const comment = await Comment.findById(commentId);
@@ -369,7 +455,7 @@ exports.addDeepNestedReply = async (req, res) => {
       userEmail: email,
       userName: user?.name || 'User',
       userPhoto: user?.photoURL || '',
-      content: content.trim(),
+      content: sanitizedContent,
       reactions: [],
       replies: [], // Max 3 levels - no deeper replies allowed
       createdAt: Date.now(),
@@ -393,15 +479,23 @@ exports.addDeepNestedReply = async (req, res) => {
 exports.updateReply = async (req, res) => {
   try {
     const { commentId, replyId, nestedReplyId, deepNestedReplyId } = req.params;
-    const { content } = req.body;
+    let { content } = req.body;
     const { email } = await getRequesterContext(req);
 
     if (!email) {
       return res.status(401).json({ message: 'Login required' });
     }
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ message: 'Reply content is required' });
+    // Validate content before sanitization
+    const validationErrors = validateContent(content);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: validationErrors[0] });
+    }
+
+    // Sanitize content
+    const sanitizedContent = sanitizeContent(content);
+    if (!sanitizedContent) {
+      return res.status(400).json({ message: 'Invalid content' });
     }
 
     const comment = await Comment.findById(commentId);
@@ -438,7 +532,7 @@ exports.updateReply = async (req, res) => {
       return res.status(403).json({ message: 'Can only edit your own replies' });
     }
 
-    targetReply.content = content.trim();
+    targetReply.content = sanitizedContent;
     targetReply.updatedAt = Date.now();
     await comment.save();
 
