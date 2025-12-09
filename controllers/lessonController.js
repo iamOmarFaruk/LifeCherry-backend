@@ -220,6 +220,10 @@ exports.getLessonById = async (req, res) => {
     const lesson = await Lesson.findById(id).lean();
     if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
 
+    // Fetch creator bio
+    const creator = await User.findOne({ email: lesson.creatorEmail }).select('bio').lean();
+    const creatorBio = creator?.bio || '';
+
     const { email, role, isPremium } = await getRequesterContext(req);
     const isOwner = email && email === lesson.creatorEmail;
 
@@ -232,7 +236,10 @@ exports.getLessonById = async (req, res) => {
       if (!isPremium) return res.status(403).json({ message: 'Premium access required' });
     }
 
-    return res.status(200).json({ lesson: sanitizeLesson(lesson) });
+    const sanitizedLesson = sanitizeLesson(lesson);
+    sanitizedLesson.creatorBio = creatorBio;
+
+    return res.status(200).json({ lesson: sanitizedLesson });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch lesson', error: error.message });
   }

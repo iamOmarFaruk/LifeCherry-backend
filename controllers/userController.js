@@ -3,8 +3,8 @@ const { logChange } = require('./auditController');
 
 const sanitizeUser = (user) => {
   if (!user) return null;
-  const { _id, name, email, photoURL, role, isPremium, createdAt, updatedAt } = user;
-  return { id: _id, name, email, photoURL, role, isPremium, createdAt, updatedAt };
+  const { _id, name, email, photoURL, bio, role, isPremium, createdAt, updatedAt } = user;
+  return { id: _id, name, email, photoURL, bio, role, isPremium, createdAt, updatedAt };
 };
 
 // GET /users/me - current user profile
@@ -65,7 +65,7 @@ exports.updateUserProfile = async (req, res) => {
     const email = req.params.email?.toLowerCase();
     if (!email) return res.status(400).json({ message: 'Email is required' });
 
-    const allowed = ['name', 'photoURL'];
+    const allowed = ['name', 'photoURL', 'bio'];
     const update = {};
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) update[field] = req.body[field];
