@@ -362,7 +362,7 @@ exports.updateLesson = async (req, res) => {
     const lesson = await Lesson.findById(id).lean();
     if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
 
-    const { email, role } = await getRequesterContext(req);
+    const { email, role, user } = await getRequesterContext(req);
     const isOwner = email && email === lesson.creatorEmail;
     if (!isOwner && role !== 'admin') {
       return res.status(403).json({ message: 'Forbidden' });
