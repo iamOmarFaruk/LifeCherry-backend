@@ -145,7 +145,7 @@ exports.listLessons = async (req, res) => {
 
     const filters = {};
     // By default, hide archived lessons
-    filters.isArchived = false;
+    filters.isArchived = { $ne: true };
 
     const requestedVisibility = req.query.visibility;
     if (role === 'admin' && requestedVisibility === 'all') {
