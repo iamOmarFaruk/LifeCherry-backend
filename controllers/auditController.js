@@ -77,13 +77,35 @@ exports.listAdminChanges = async (req, res) => {
   }
 };
 
+const User = require('../models/User');
+
 exports.listUserChanges = async (req, res) => {
   try {
     const email = req.user?.email?.toLowerCase();
     if (!email) return res.status(401).json({ message: 'Unauthorized' });
 
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    // Fetch user to check premium status
+    const user = await User.findOne({ email });
+    const isPremium = user?.isPremium || false;
+
+    let page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    let limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+
+    // Enforce limits for free users
+    if (!isPremium) {
+      if (page > 1) {
+        // Free users only get the first page
+        return res.status(200).json({ 
+          page, 
+          limit, 
+          total: 0, // Or real total, but changes empty
+          changes: [], 
+          isPremium: false 
+        });
+      }
+      limit = Math.min(limit, 10); // Cap limit at 10 for free users, but allow lower
+    }
+
     const skip = (page - 1) * limit;
 
     const filters = {
@@ -99,7 +121,13 @@ exports.listUserChanges = async (req, res) => {
       ChangeLog.find(filters).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     ]);
 
-    return res.status(200).json({ page, limit, total, changes: changes.map(sanitizeChange) });
+    return res.status(200).json({ 
+      page, 
+      limit, 
+      total, 
+      changes: changes.map(sanitizeChange),
+      isPremium 
+    });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch user changes', error: error.message });
   }
