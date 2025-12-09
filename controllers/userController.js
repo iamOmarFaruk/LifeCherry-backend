@@ -1,10 +1,37 @@
 const User = require('../models/User');
+const Lesson = require('../models/Lesson');
 const { logChange } = require('./auditController');
 
 const sanitizeUser = (user) => {
   if (!user) return null;
-  const { _id, name, email, photoURL, bio, role, isPremium, createdAt, updatedAt } = user;
-  return { id: _id, name, email, photoURL, bio, role, isPremium, createdAt, updatedAt };
+  const {
+    _id,
+    name,
+    email,
+    photoURL,
+    bio,
+    role,
+    isPremium,
+    status,
+    disableRequestDate,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  } = user;
+  return {
+    id: _id,
+    name,
+    email,
+    photoURL,
+    bio,
+    role,
+    isPremium,
+    status,
+    disableRequestDate,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  };
 };
 
 // GET /users/me - current user profile
@@ -25,6 +52,19 @@ exports.upsertUser = async (req, res) => {
   try {
     const { email, name, photoURL } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    // Check if user exists and is archived
+    const existingUser = await User.findOne({ email: email.toLowerCase() }).lean();
+    if (existingUser && existingUser.status === 'archived') {
+      return res.status(403).json({
+        message: 'Your account is archived by your request.',
+        archivedAt: existingUser.archivedAt,
+        contact: {
+          phone: 'Admin Phone',
+          email: 'admin@lifecherry.com',
+        },
+      });
+    }
 
     const update = {
       email: email.toLowerCase(),
@@ -95,7 +135,120 @@ exports.updateUserProfile = async (req, res) => {
 
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (error) {
-    return res.status(500).json({ message: 'Failed to update user', error: error.message });
+    return res.status(500).json({ message: 'Failed to fetch user', error: error.message });
+  }
+};
+
+// POST /users/request-disable - user requests account disable
+exports.requestDisable = async (req, res) => {
+  try {
+    const email = req.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await User.findOneAndUpdate(
+      { email },
+      {
+        $set: {
+          status: 'disable_requested',
+          disableRequestDate: new Date(),
+        },
+      },
+      { new: true }
+    ).lean();
+
+    await logChange({
+      actorEmail: email,
+      actorName: user.name,
+      actorRole: user.role,
+      targetType: 'user',
+      targetId: user._id.toString(),
+      targetOwnerEmail: email,
+      action: 'request-disable',
+      summary: 'User requested account disable',
+    });
+
+    return res.status(200).json({ user: sanitizeUser(user) });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to request disable', error: error.message });
+  }
+};
+
+// POST /users/cancel-disable-request - user cancels request
+exports.cancelDisableRequest = async (req, res) => {
+  try {
+    const email = req.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await User.findOneAndUpdate(
+      { email },
+      {
+        $set: {
+          status: 'active',
+          disableRequestDate: null,
+        },
+      },
+      { new: true }
+    ).lean();
+
+    await logChange({
+      actorEmail: email,
+      actorName: user.name,
+      actorRole: user.role,
+      targetType: 'user',
+      targetId: user._id.toString(),
+      targetOwnerEmail: email,
+      action: 'cancel-disable-request',
+      summary: 'User cancelled account disable request',
+    });
+
+    return res.status(200).json({ user: sanitizeUser(user) });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to cancel request', error: error.message });
+  }
+};
+
+// POST /users/manage-status - admin manages user status
+exports.manageUserStatus = async (req, res) => {
+  try {
+    const { email, action } = req.body; // action: 'archive' or 'restore'
+    if (!email || !action) return res.status(400).json({ message: 'Email and action required' });
+
+    const targetUser = await User.findOne({ email: email.toLowerCase() });
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
+
+    if (action === 'archive') {
+      targetUser.status = 'archived';
+      targetUser.archivedAt = new Date();
+      await targetUser.save();
+
+      // Hide all lessons
+      await Lesson.updateMany({ creatorEmail: email.toLowerCase() }, { $set: { isArchived: true } });
+    } else if (action === 'restore') {
+      targetUser.status = 'active';
+      targetUser.disableRequestDate = null;
+      targetUser.archivedAt = null;
+      await targetUser.save();
+
+      // Restore lessons
+      await Lesson.updateMany({ creatorEmail: email.toLowerCase() }, { $set: { isArchived: false } });
+    } else {
+      return res.status(400).json({ message: 'Invalid action' });
+    }
+
+    await logChange({
+      actorEmail: req.user?.email,
+      actorName: req.user?.name,
+      actorRole: 'admin',
+      targetType: 'user',
+      targetId: targetUser._id.toString(),
+      targetOwnerEmail: targetUser.email,
+      action: `admin-${action}-user`,
+      summary: `Admin ${action}d user account`,
+    });
+
+    return res.status(200).json({ user: sanitizeUser(targetUser) });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to manage user status', error: error.message });
   }
 };
 
@@ -107,6 +260,7 @@ exports.listUsers = async (req, res) => {
     const skip = (page - 1) * limit;
     const filters = {};
     if (req.query.role) filters.role = req.query.role;
+    if (req.query.status) filters.status = req.query.status;
     if (req.query.isPremium !== undefined) filters.isPremium = req.query.isPremium === 'true';
     if (req.query.search) {
       filters.$or = [

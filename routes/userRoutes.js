@@ -9,6 +9,9 @@ const {
   updateUserPremium,
   checkAdmin,
   checkPremium,
+  requestDisable,
+  cancelDisableRequest,
+  manageUserStatus,
 } = require('../controllers/userController');
 const verifyToken = require('../middleware/verifyToken');
 const verifyAdmin = require('../middleware/verifyAdmin');
@@ -37,6 +40,18 @@ router.get('/users/me', verifyToken, (req, res, next) => {
 router.patch('/users/me', verifyToken, (req, res, next) => {
   req.params.email = req.user?.email?.toLowerCase();
   return updateUserProfile(req, res, next);
+});
+
+router.post('/users/request-disable', verifyToken, (req, res, next) => {
+  return requestDisable(req, res, next);
+});
+
+router.post('/users/cancel-disable-request', verifyToken, (req, res, next) => {
+  return cancelDisableRequest(req, res, next);
+});
+
+router.post('/users/manage-status', verifyToken, verifyAdmin, (req, res, next) => {
+  return manageUserStatus(req, res, next);
 });
 
 router.get('/users', verifyToken, verifyAdmin, (req, res, next) => {

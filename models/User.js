@@ -8,6 +8,13 @@ const userSchema = new mongoose.Schema(
     bio: { type: String, trim: true, maxLength: 500, default: '' },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     isPremium: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ['active', 'archived', 'disable_requested'],
+      default: 'active',
+    },
+    disableRequestDate: { type: Date, default: null },
+    archivedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -22,6 +22,7 @@ const lessonSchema = new mongoose.Schema(
     creatorPhoto: { type: String, trim: true },
     isFeatured: { type: Boolean, default: false },
     isReviewed: { type: Boolean, default: false },
+    isArchived: { type: Boolean, default: false },
     likes: { type: [String], default: [] },
     likesCount: { type: Number, default: 0 },
     favorites: { type: [String], default: [] },

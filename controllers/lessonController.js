@@ -25,6 +25,7 @@ const sanitizeLesson = (lesson) => {
     creatorPhoto,
     isFeatured,
     isReviewed,
+    isArchived,
     likes,
     likesCount,
     favorites,
@@ -49,6 +50,7 @@ const sanitizeLesson = (lesson) => {
     creatorPhoto,
     isFeatured,
     isReviewed,
+    isArchived,
     likes,
     likesCount,
     favorites,
@@ -142,10 +144,18 @@ exports.listLessons = async (req, res) => {
     const sort = parseSort(req.query.sort);
 
     const filters = {};
+    // By default, hide archived lessons
+    filters.isArchived = false;
 
     const requestedVisibility = req.query.visibility;
     if (role === 'admin' && requestedVisibility === 'all') {
-      // admin can see everything
+      // admin can see everything, including archived if they want?
+      // If admin explicitly asks for 'all', maybe we should show archived too?
+      // For now, let's keep archived hidden in the main list unless specifically requested?
+      // Actually, let's just allow admin to override isArchived if they want.
+      if (req.query.includeArchived === 'true') {
+        delete filters.isArchived;
+      }
     } else if (role === 'admin' && visibilityOptions.has(requestedVisibility)) {
       filters.visibility = requestedVisibility;
     } else {
