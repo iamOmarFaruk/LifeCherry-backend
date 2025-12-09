@@ -81,7 +81,7 @@ const getRequesterContext = async (req) => {
   return {
     email,
     role: user?.role || req.user?.role || 'user',
-    isPremium: !!user?.isPremium,
+    isPremium: !!user?.isPremium || user?.role === 'admin',
     user,
   };
 };

@@ -86,7 +86,7 @@ exports.listUserChanges = async (req, res) => {
 
     // Fetch user to check premium status
     const user = await User.findOne({ email });
-    const isPremium = user?.isPremium || false;
+    const isPremium = user?.isPremium || user?.role === 'admin' || false;
 
     let page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     let limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
