@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Lesson = require('../models/Lesson');
+const Comment = require('../models/Comment');
 const { logChange } = require('./auditController');
 
 const sanitizeUser = (user) => {
@@ -210,6 +211,41 @@ exports.cancelDisableRequest = async (req, res) => {
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to cancel request', error: error.message });
+  }
+};
+
+// DELETE /users/me - delete own account permanently
+exports.deleteAccount = async (req, res) => {
+  try {
+    const email = req.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Delete user's lessons
+    await Lesson.deleteMany({ creatorEmail: email });
+
+    // Delete user's comments
+    await Comment.deleteMany({ userEmail: email });
+
+    // Delete the user
+    await User.deleteOne({ email });
+
+    await logChange({
+      actorEmail: email,
+      actorName: user.name,
+      actorRole: user.role,
+      targetType: 'user',
+      targetId: user._id.toString(),
+      targetOwnerEmail: email,
+      action: 'delete-account',
+      summary: 'User deleted their own account permanently',
+    });
+
+    return res.status(200).json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to delete account', error: error.message });
   }
 };
 

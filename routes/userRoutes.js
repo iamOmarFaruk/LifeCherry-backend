@@ -12,6 +12,7 @@ const {
   requestDisable,
   cancelDisableRequest,
   manageUserStatus,
+  deleteAccount,
 } = require('../controllers/userController');
 const verifyToken = require('../middleware/verifyToken');
 const verifyAdmin = require('../middleware/verifyAdmin');
@@ -48,6 +49,10 @@ router.post('/users/request-disable', verifyToken, (req, res, next) => {
 
 router.post('/users/cancel-disable-request', verifyToken, (req, res, next) => {
   return cancelDisableRequest(req, res, next);
+});
+
+router.delete('/users/me', verifyToken, (req, res, next) => {
+  return deleteAccount(req, res, next);
 });
 
 router.post('/users/manage-status', verifyToken, verifyAdmin, (req, res, next) => {
