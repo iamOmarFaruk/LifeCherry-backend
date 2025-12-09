@@ -55,6 +55,11 @@ exports.createReport = async (req, res) => {
       return res.status(404).json({ message: 'Lesson not found' });
     }
 
+    // Prevent reporting own lesson
+    if (lesson.creatorEmail === email) {
+      return res.status(400).json({ message: 'You cannot report your own lesson' });
+    }
+
     // Check if user already reported this lesson
     const existingReport = await Report.findOne({ lessonId, reporterEmail: email });
     if (existingReport) {

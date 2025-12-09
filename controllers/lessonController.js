@@ -393,6 +393,21 @@ exports.updateLesson = async (req, res) => {
 
     const updated = await Lesson.findByIdAndUpdate(id, { $set: updates }, { new: true }).lean();
 
+    // Calculate detailed changes for the log
+    const detailedChanges = [];
+    Object.keys(updates).forEach((key) => {
+      const oldValue = lesson[key];
+      const newValue = updates[key];
+      // Simple equality check (works for strings, numbers, booleans in this context)
+      if (oldValue !== newValue) {
+        detailedChanges.push({
+          field: key,
+          from: oldValue,
+          to: newValue
+        });
+      }
+    });
+
     await logChange({
       actorEmail: email,
       actorName: user?.name || req.user?.name || req.user?.displayName,
@@ -402,7 +417,10 @@ exports.updateLesson = async (req, res) => {
       targetOwnerEmail: lesson.creatorEmail,
       action: 'update',
       summary: `Updated lesson "${lesson.title}"`,
-      metadata: { fields: Object.keys(updates) },
+      metadata: { 
+        fields: Object.keys(updates),
+        detailedChanges 
+      },
     });
 
     return res.status(200).json({ lesson: sanitizeLesson(updated) });
