@@ -190,6 +190,10 @@ exports.listLessons = async (req, res) => {
       filters.$or = [{ title: regex }, { description: regex }];
     }
 
+    if (req.query.favoritedBy) {
+      filters.favorites = req.query.favoritedBy.toLowerCase();
+    }
+
     const [total, lessons] = await Promise.all([
       Lesson.countDocuments(filters),
       Lesson.find(filters).sort(sort).skip(skip).limit(limit).lean(),
