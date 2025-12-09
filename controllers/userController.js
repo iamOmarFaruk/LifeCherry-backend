@@ -14,6 +14,7 @@ const sanitizeUser = (user) => {
     isPremium,
     status,
     disableRequestDate,
+    disableReason,
     archivedAt,
     createdAt,
     updatedAt,
@@ -28,6 +29,7 @@ const sanitizeUser = (user) => {
     isPremium,
     status,
     disableRequestDate,
+    disableReason,
     archivedAt,
     createdAt,
     updatedAt,
@@ -143,6 +145,7 @@ exports.updateUserProfile = async (req, res) => {
 exports.requestDisable = async (req, res) => {
   try {
     const email = req.user?.email?.toLowerCase();
+    const { reason } = req.body;
     if (!email) return res.status(401).json({ message: 'Unauthorized' });
 
     const user = await User.findOneAndUpdate(
@@ -151,6 +154,7 @@ exports.requestDisable = async (req, res) => {
         $set: {
           status: 'disable_requested',
           disableRequestDate: new Date(),
+          disableReason: reason || '',
         },
       },
       { new: true }
@@ -164,7 +168,8 @@ exports.requestDisable = async (req, res) => {
       targetId: user._id.toString(),
       targetOwnerEmail: email,
       action: 'request-disable',
-      summary: 'User requested account disable',
+      summary: `User requested account disable. Reason: ${reason || 'No reason provided'}`,
+      metadata: { reason },
     });
 
     return res.status(200).json({ user: sanitizeUser(user) });
@@ -185,6 +190,7 @@ exports.cancelDisableRequest = async (req, res) => {
         $set: {
           status: 'active',
           disableRequestDate: null,
+          disableReason: null,
         },
       },
       { new: true }

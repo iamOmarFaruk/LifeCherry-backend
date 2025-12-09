@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
       enum: ['active', 'archived', 'disable_requested'],
       default: 'active',
     },
+    disableReason: { type: String, trim: true },
     disableRequestDate: { type: Date, default: null },
     archivedAt: { type: Date, default: null },
   },
