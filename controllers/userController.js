@@ -17,6 +17,10 @@ const sanitizeUser = (user) => {
     disableRequestDate,
     disableReason,
     archivedAt,
+    archiveReason,
+    reactivationRequest,
+    reactivationMessage,
+    reactivationRequestDate,
     createdAt,
     updatedAt,
   } = user;
@@ -32,6 +36,10 @@ const sanitizeUser = (user) => {
     disableRequestDate,
     disableReason,
     archivedAt,
+    archiveReason,
+    reactivationRequest,
+    reactivationMessage,
+    reactivationRequestDate,
     createdAt,
     updatedAt,
   };
@@ -58,14 +66,16 @@ exports.upsertUser = async (req, res) => {
 
     // Check if user exists and is archived
     const existingUser = await User.findOne({ email: email.toLowerCase() }).lean();
-    if (existingUser && existingUser.status === 'archived') {
+    if (existingUser && (existingUser.status === 'archived' || existingUser.status === 'reactivation_requested')) {
       return res.status(403).json({
-        message: 'Your account is archived by your request.',
+        message: 'Your account has been disabled by an administrator.',
+        isArchived: true,
+        archiveReason: existingUser.archiveReason || 'No reason provided',
         archivedAt: existingUser.archivedAt,
-        contact: {
-          phone: 'Admin Phone',
-          email: 'admin@lifecherry.com',
-        },
+        hasRequestedReactivation: existingUser.reactivationRequest || existingUser.status === 'reactivation_requested',
+        reactivationRequestDate: existingUser.reactivationRequestDate,
+        userEmail: existingUser.email,
+        userName: existingUser.name,
       });
     }
 
@@ -252,30 +262,55 @@ exports.deleteAccount = async (req, res) => {
 // POST /users/manage-status - admin manages user status
 exports.manageUserStatus = async (req, res) => {
   try {
-    const { email, action } = req.body; // action: 'archive' or 'restore'
+    const { email, action, reason } = req.body; // action: 'archive', 'restore', or 'approve-reactivation'
     if (!email || !action) return res.status(400).json({ message: 'Email and action required' });
 
     const targetUser = await User.findOne({ email: email.toLowerCase() });
     if (!targetUser) return res.status(404).json({ message: 'User not found' });
 
     if (action === 'archive') {
+      if (!reason || reason.trim().length === 0) {
+        return res.status(400).json({ message: 'Archive reason is required' });
+      }
       targetUser.status = 'archived';
       targetUser.archivedAt = new Date();
+      targetUser.archiveReason = reason.trim();
+      targetUser.reactivationRequest = false;
+      targetUser.reactivationMessage = null;
+      targetUser.reactivationRequestDate = null;
       await targetUser.save();
 
       // Hide all lessons
       await Lesson.updateMany({ creatorEmail: email.toLowerCase() }, { $set: { isArchived: true } });
-    } else if (action === 'restore') {
+    } else if (action === 'restore' || action === 'approve-reactivation') {
       targetUser.status = 'active';
       targetUser.disableRequestDate = null;
       targetUser.archivedAt = null;
+      targetUser.archiveReason = null;
+      targetUser.reactivationRequest = false;
+      targetUser.reactivationMessage = null;
+      targetUser.reactivationRequestDate = null;
       await targetUser.save();
 
       // Restore lessons
       await Lesson.updateMany({ creatorEmail: email.toLowerCase() }, { $set: { isArchived: false } });
+    } else if (action === 'reject-reactivation') {
+      // Keep archived but clear the request
+      targetUser.status = 'archived';
+      targetUser.reactivationRequest = false;
+      targetUser.reactivationMessage = null;
+      targetUser.reactivationRequestDate = null;
+      await targetUser.save();
     } else {
       return res.status(400).json({ message: 'Invalid action' });
     }
+
+    const actionSummary = {
+      'archive': `Admin archived user account. Reason: ${reason}`,
+      'restore': 'Admin restored user account',
+      'approve-reactivation': 'Admin approved reactivation request and restored user account',
+      'reject-reactivation': 'Admin rejected reactivation request',
+    };
 
     await logChange({
       actorEmail: req.user?.email,
@@ -285,7 +320,8 @@ exports.manageUserStatus = async (req, res) => {
       targetId: targetUser._id.toString(),
       targetOwnerEmail: targetUser.email,
       action: `admin-${action}-user`,
-      summary: `Admin ${action}d user account`,
+      summary: actionSummary[action] || `Admin ${action}d user account`,
+      metadata: action === 'archive' ? { reason } : undefined,
     });
 
     return res.status(200).json({ user: sanitizeUser(targetUser) });
@@ -410,5 +446,67 @@ exports.checkPremium = async (req, res) => {
     return res.status(200).json({ isPremium: !!user?.isPremium });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to check premium', error: error.message });
+  }
+};
+
+// POST /users/request-reactivation - archived user requests account reactivation
+exports.requestReactivation = async (req, res) => {
+  try {
+    const { email, message } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ message: 'Reactivation message is required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.status !== 'archived' && user.status !== 'reactivation_requested') {
+      return res.status(400).json({ message: 'Account is not archived' });
+    }
+
+    user.status = 'reactivation_requested';
+    user.reactivationRequest = true;
+    user.reactivationMessage = message.trim();
+    user.reactivationRequestDate = new Date();
+    await user.save();
+
+    await logChange({
+      actorEmail: email,
+      actorName: user.name,
+      actorRole: 'user',
+      targetType: 'user',
+      targetId: user._id.toString(),
+      targetOwnerEmail: email,
+      action: 'request-reactivation',
+      summary: `User requested account reactivation: ${message.trim().substring(0, 100)}`,
+      metadata: { message: message.trim() },
+    });
+
+    return res.status(200).json({
+      message: 'Reactivation request submitted successfully',
+      user: sanitizeUser(user)
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to request reactivation', error: error.message });
+  }
+};
+
+// GET /users/reactivation-requests - admin gets list of pending reactivation requests
+exports.getReactivationRequests = async (req, res) => {
+  try {
+    const users = await User.find({
+      $or: [
+        { status: 'reactivation_requested' },
+        { reactivationRequest: true }
+      ]
+    }).sort({ reactivationRequestDate: -1 }).lean();
+
+    return res.status(200).json({
+      total: users.length,
+      users: users.map(sanitizeUser),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to fetch reactivation requests', error: error.message });
   }
 };

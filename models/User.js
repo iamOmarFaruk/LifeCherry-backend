@@ -10,12 +10,16 @@ const userSchema = new mongoose.Schema(
     isPremium: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ['active', 'archived', 'disable_requested'],
+      enum: ['active', 'archived', 'disable_requested', 'reactivation_requested'],
       default: 'active',
     },
     disableReason: { type: String, trim: true },
     disableRequestDate: { type: Date, default: null },
     archivedAt: { type: Date, default: null },
+    archiveReason: { type: String, trim: true }, // Reason provided by admin when archiving
+    reactivationRequest: { type: Boolean, default: false },
+    reactivationMessage: { type: String, trim: true }, // Message from user requesting reactivation
+    reactivationRequestDate: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -13,6 +13,8 @@ const {
   cancelDisableRequest,
   manageUserStatus,
   deleteAccount,
+  requestReactivation,
+  getReactivationRequests,
 } = require('../controllers/userController');
 const verifyToken = require('../middleware/verifyToken');
 const verifyAdmin = require('../middleware/verifyAdmin');
@@ -57,6 +59,16 @@ router.delete('/users/me', verifyToken, (req, res, next) => {
 
 router.post('/users/manage-status', verifyToken, verifyAdmin, (req, res, next) => {
   return manageUserStatus(req, res, next);
+});
+
+// Public endpoint (no auth) - for archived users to request reactivation
+router.post('/users/request-reactivation', (req, res, next) => {
+  return requestReactivation(req, res, next);
+});
+
+// Admin only - get list of reactivation requests
+router.get('/users/reactivation-requests', verifyToken, verifyAdmin, (req, res, next) => {
+  return getReactivationRequests(req, res, next);
 });
 
 router.get('/users', verifyToken, verifyAdmin, (req, res, next) => {
