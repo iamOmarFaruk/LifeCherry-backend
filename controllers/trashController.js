@@ -59,7 +59,7 @@ exports.moveToTrash = async (originalId, itemType, itemData, deletedByEmail, del
 exports.listTrash = async (req, res) => {
   try {
     const { role } = req.user;
-    
+
     // Only admins can view trash
     if (role !== 'admin') {
       return res.status(403).json({ message: 'Only admins can access trash' });
@@ -68,7 +68,7 @@ exports.listTrash = async (req, res) => {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
-    
+
     const itemType = req.query.itemType;
     const filters = { status: 'trashed' };
     if (itemType && ['lesson', 'profile'].includes(itemType)) {
@@ -183,37 +183,4 @@ exports.permanentlyDeleteFromTrash = async (req, res) => {
   }
 };
 
-// Empty trash (admin only - delete all items older than X days)
-exports.emptyTrash = async (req, res) => {
-  try {
-    const { role, email, name } = req.user;
 
-    if (role !== 'admin') {
-      return res.status(403).json({ message: 'Only admins can empty trash' });
-    }
-
-    // Mark items older than 30 days as permanently deleted
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const result = await Trash.updateMany(
-      { createdAt: { $lt: thirtyDaysAgo }, status: 'trashed' },
-      { status: 'permanently_deleted' }
-    );
-
-    await logChange({
-      actorEmail: email.toLowerCase(),
-      actorName: name,
-      actorRole: role,
-      targetType: 'trash',
-      action: 'empty',
-      summary: `Auto-emptied trash: ${result.modifiedCount} items permanently deleted (30+ days old)`,
-    });
-
-    return res.status(200).json({
-      message: 'Trash emptied',
-      deletedCount: result.modifiedCount,
-    });
-  } catch (error) {
-    return res.status(500).json({ message: 'Failed to empty trash', error: error.message });
-  }
-};
