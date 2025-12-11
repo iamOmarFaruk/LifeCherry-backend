@@ -9,12 +9,16 @@ const {
   recordLessonView,
   toggleLike,
   toggleFavorite,
+  getLessonStats,
+  syncReportCounts,
 } = require('../controllers/lessonController');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 
 const router = express.Router();
 
+router.get('/lessons/stats', verifyToken, getLessonStats);
+router.post('/lessons/sync-counts', verifyToken, syncReportCounts);
 router.post('/lessons', verifyToken, createLesson);
 router.get('/lessons', optionalAuth, listLessons);
 router.get('/lessons/user/:email', verifyToken, getLessonsByUser);

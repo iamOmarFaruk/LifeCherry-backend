@@ -27,6 +27,7 @@ const lessonSchema = new mongoose.Schema(
     likesCount: { type: Number, default: 0 },
     favorites: { type: [String], default: [] },
     favoritesCount: { type: Number, default: 0 },
+    reportCount: { type: Number, default: 0 },
     views: { type: Number, default: 0 },
   },
   { timestamps: true }

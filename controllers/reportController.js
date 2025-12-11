@@ -12,7 +12,7 @@ async function getRequesterContext(req) {
   if (!email) {
     return { email: null, user: null };
   }
-  
+
   const user = await User.findOne({ email }).lean();
   return { email, user };
 }
@@ -22,7 +22,7 @@ function sanitizeContent(content) {
   if (!content || typeof content !== 'string') {
     return null;
   }
-  
+
   let sanitized = content.trim();
   sanitized = xss(sanitized, {
     whiteList: {},
@@ -31,7 +31,7 @@ function sanitizeContent(content) {
   });
   sanitized = validator.stripLow(sanitized);
   sanitized = validator.escape(sanitized);
-  
+
   return sanitized;
 }
 
@@ -95,6 +95,7 @@ exports.createReport = async (req, res) => {
     });
 
     await report.save();
+    await Lesson.findByIdAndUpdate(lessonId, { $inc: { reportCount: 1 } });
 
     // Log activity
     await logChange({
@@ -175,7 +176,7 @@ exports.checkUserReport = async (req, res) => {
     }
 
     const report = await Report.findOne({ lessonId, reporterEmail: email }).lean();
-    
+
     return res.status(200).json({
       reported: !!report,
       report: report || null,
@@ -215,6 +216,9 @@ exports.withdrawReport = async (req, res) => {
 
     report.status = 'withdrawn';
     await report.save();
+
+    // Decrement lesson report count
+    await Lesson.findByIdAndUpdate(report.lessonId, { $inc: { reportCount: -1 } });
 
     // Log activity
     await logChange({

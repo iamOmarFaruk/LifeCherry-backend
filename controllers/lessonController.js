@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 const Lesson = require('../models/Lesson');
 const User = require('../models/User');
+const Report = require('../models/Report');
 const { logChange } = require('./auditController');
 const { moveToTrash } = require('./trashController');
 
 const visibilityOptions = new Set(['public', 'private', 'draft']);
 const accessLevelOptions = new Set(['free', 'premium']);
-const sortableFields = new Set(['createdAt', 'updatedAt', 'likesCount', 'favoritesCount']);
+const sortableFields = new Set(['createdAt', 'updatedAt', 'likesCount', 'favoritesCount', 'reportCount']);
 
 const sanitizeLesson = (lesson) => {
   if (!lesson) return null;
@@ -30,6 +31,7 @@ const sanitizeLesson = (lesson) => {
     likesCount,
     favorites,
     favoritesCount,
+    reportCount,
     views,
     createdAt,
     updatedAt,
@@ -55,6 +57,7 @@ const sanitizeLesson = (lesson) => {
     likesCount,
     favorites,
     favoritesCount,
+    reportCount,
     views,
     createdAt,
     updatedAt,
@@ -259,7 +262,7 @@ exports.recordLessonView = async (req, res) => {
   try {
     const { id } = req.params;
     const { email, role } = await getRequesterContext(req);
-    
+
     console.log('[View Recording] Request received:', { lessonId: id, userEmail: email, userRole: role });
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -311,7 +314,7 @@ exports.recordLessonView = async (req, res) => {
       targetOwnerEmail: lesson.creatorEmail,
       action: 'view',
       summary: `Viewed lesson "${lesson.title}"`,
-      metadata: { 
+      metadata: {
         lessonTitle: lesson.title,
         category: lesson.category,
         totalViews: updated.views
@@ -417,9 +420,9 @@ exports.updateLesson = async (req, res) => {
       targetOwnerEmail: lesson.creatorEmail,
       action: 'update',
       summary: `Updated lesson "${lesson.title}"`,
-      metadata: { 
+      metadata: {
         fields: Object.keys(updates),
-        detailedChanges 
+        detailedChanges
       },
     });
 
@@ -600,5 +603,80 @@ exports.toggleFavorite = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to toggle favorite', error: error.message });
+  }
+};
+
+exports.getLessonStats = async (req, res) => {
+  try {
+    const { email, role } = await getRequesterContext(req);
+
+    if (role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const [total, publicCount, privateCount, featured, flagged] = await Promise.all([
+      Lesson.countDocuments({}),
+      Lesson.countDocuments({ visibility: 'public' }),
+      Lesson.countDocuments({ visibility: 'private' }),
+      Lesson.countDocuments({ isFeatured: true }),
+      Lesson.countDocuments({ reportCount: { $gt: 0 } })
+    ]);
+
+    return res.status(200).json({
+      total,
+      public: publicCount,
+      private: privateCount,
+      featured,
+      flagged
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to fetch stats', error: error.message });
+  }
+};
+
+exports.syncReportCounts = async (req, res) => {
+  try {
+    const { role } = await getRequesterContext(req);
+    if (role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    console.log('[Sync] Starting report count sync...');
+
+    // 1. Reset all counts to 0
+    await Lesson.updateMany({}, { reportCount: 0 });
+
+    // 2. Aggregate active reports (not withdrawn)
+    const reportCounts = await Report.aggregate([
+      {
+        $match: {
+          status: { $ne: 'withdrawn' }
+        }
+      },
+      {
+        $group: {
+          _id: '$lessonId',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    console.log(`[Sync] Found reports for ${reportCounts.length} lessons`);
+
+    // 3. Update lessons with new counts
+    const updatePromises = reportCounts.map(({ _id, count }) =>
+      Lesson.findByIdAndUpdate(_id, { reportCount: count })
+    );
+
+    await Promise.all(updatePromises);
+    console.log('[Sync] Completed report count sync');
+
+    return res.status(200).json({
+      message: 'Report counts synced successfully',
+      updatedLessons: reportCounts.length
+    });
+  } catch (error) {
+    console.error('[Sync] Failed:', error);
+    return res.status(500).json({ message: 'Failed to sync report counts', error: error.message });
   }
 };
