@@ -614,12 +614,13 @@ exports.getLessonStats = async (req, res) => {
       return res.status(403).json({ message: 'Admin access required' });
     }
 
-    const [total, publicCount, privateCount, featured, flagged] = await Promise.all([
+    const [total, publicCount, privateCount, featured, flagged, premium] = await Promise.all([
       Lesson.countDocuments({}),
       Lesson.countDocuments({ visibility: 'public' }),
       Lesson.countDocuments({ visibility: 'private' }),
       Lesson.countDocuments({ isFeatured: true }),
-      Lesson.countDocuments({ reportCount: { $gt: 0 } })
+      Lesson.countDocuments({ reportCount: { $gt: 0 } }),
+      Lesson.countDocuments({ accessLevel: 'premium' })
     ]);
 
     return res.status(200).json({
@@ -627,7 +628,8 @@ exports.getLessonStats = async (req, res) => {
       public: publicCount,
       private: privateCount,
       featured,
-      flagged
+      flagged,
+      premium
     });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch stats', error: error.message });
