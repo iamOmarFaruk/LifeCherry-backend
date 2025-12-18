@@ -11,6 +11,7 @@ const trashRoutes = require('./routes/trashRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const sanitizeHtml = require('sanitize-html');
 
 const app = express();
@@ -49,8 +50,33 @@ const sanitizeStrings = (obj) => {
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : '*', credentials: true }));
-app.use(express.json({ limit: '1mb' }));
+
+// Custom middleware to capture raw body for Stripe webhook
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/payments/webhook')) {
+    next();
+  } else {
+    express.json({ limit: '1mb' })(req, res, next);
+  }
+});
+
+// For webhook route, we need raw body. For others, we need generic JSON parsing if not handled above.
+// However, reusing express.json for others is cleaner.
+// Actually, let's use a cleaner approach:
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    // Only store rawBody if needed (e.g., for Stripe)
+    if (req.originalUrl.includes('/webhook')) {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
+
 app.use((req, _res, next) => {
+  // Skip sanitization for webhook rawBody
+  if (req.originalUrl.includes('/webhook')) return next();
+
   sanitizePayload(req.body);
   sanitizePayload(req.params);
   sanitizePayload(req.query);
@@ -83,6 +109,7 @@ app.use('/api', trashRoutes);
 app.use('/api', commentRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', adminRoutes);
+app.use('/api', paymentRoutes);
 
 const startServer = async () => {
   try {
