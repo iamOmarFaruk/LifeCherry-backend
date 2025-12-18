@@ -93,10 +93,9 @@ const startServer = async () => {
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 10000,
     });
-    console.log('Connected to MongoDB');
+
 
     app.listen(PORT, () => {
-      console.log(`LifeCherry server running on port ${PORT}`);
     });
   } catch (error) {
     console.error(
