@@ -13,6 +13,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const sanitizeHtml = require('sanitize-html');
+const hpp = require('hpp');
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -50,6 +51,7 @@ const sanitizeStrings = (obj) => {
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : '*', credentials: true }));
+app.use(hpp());
 
 // Custom middleware to capture raw body for Stripe webhook
 app.use((req, res, next) => {
