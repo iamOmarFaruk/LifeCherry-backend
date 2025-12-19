@@ -49,7 +49,10 @@ const sanitizeStrings = (obj) => {
   });
 };
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : '*', credentials: true }));
 app.use(hpp());
 

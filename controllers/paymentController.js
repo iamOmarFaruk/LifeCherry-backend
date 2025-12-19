@@ -149,19 +149,26 @@ exports.getAllPayments = async (req, res) => {
 // Verify Payment Success (Frontend Polling/Confirm)
 exports.verifyPayment = async (req, res) => {
     try {
+        if (!req.user || !req.user.email) {
+            return res.status(401).json({ message: 'Unauthorized: User context missing' });
+        }
+
         const userEmail = req.user.email;
         const { sessionId } = req.body;
+
+        console.log(`[VerifyPayment] Starting verification for session: ${sessionId}, User: ${userEmail}`);
 
         if (!sessionId) return res.status(400).json({ message: 'Session ID required' });
 
         // 1. Check local DB first
         let payment = await Payment.findOne({ stripeSessionId: sessionId });
+        console.log(`[VerifyPayment] Local payment found: ${payment ? payment.status : 'No'}`);
 
-        // 2. If status is pending or payment not found, check Stripe directly
-        // This is crucial for localhost where webhooks might fail/not be configured
+        // 2. Determine status from Stripe if not completed locally
         if (!payment || payment.status !== 'completed') {
             try {
                 const session = await stripe.checkout.sessions.retrieve(sessionId);
+                console.log(`[VerifyPayment] Stripe session status: ${session.payment_status}`);
 
                 if (session.payment_status === 'paid') {
                     // Update/Create Payment
@@ -169,55 +176,70 @@ exports.verifyPayment = async (req, res) => {
                         payment.status = 'completed';
                         payment.paymentMethod = session.payment_method_types[0] || 'card';
                         await payment.save();
+                        console.log('[VerifyPayment] Updated local payment to completed');
                     } else {
-                        // Should have been created, but just in case
                         payment = await Payment.create({
                             stripeSessionId: session.id,
-                            userId: req.user._id, // Assume current user if not found
+                            userId: req.user._id,
                             userEmail: userEmail,
                             amount: session.amount_total / 100,
                             currency: session.currency.toUpperCase(),
                             status: 'completed',
                             paymentMethod: session.payment_method_types[0] || 'card',
                         });
+                        console.log('[VerifyPayment] Created new completed payment record');
                     }
 
                     // Update User
-                    const user = await User.findOne({ email: userEmail });
-                    if (user && !user.isPremium) {
-                        user.isPremium = true;
-                        await user.save();
+                    // Prefer metadata user ID if available, else fall back to email or req.user
+                    let targetUserId = req.user._id;
+                    if (session.metadata && session.metadata.userId) {
+                        targetUserId = session.metadata.userId;
+                    }
 
-                        // Log audit only if we are taking action
-                        await logChange({
-                            actorEmail: userEmail,
-                            actorName: user.name || 'User',
-                            actorRole: 'user',
-                            targetType: 'user',
-                            targetId: user._id.toString(),
-                            targetOwnerEmail: userEmail,
-                            action: 'payment-success-verify',
-                            summary: 'User upgraded to Premium via verification (fallback)',
-                            metadata: { sessionId, amount: payment.amount }
-                        });
+                    const user = await User.findById(targetUserId);
+                    if (user) {
+                        if (!user.isPremium) {
+                            user.isPremium = true;
+                            await user.save();
+                            console.log(`[VerifyPayment] Upgraded user ${user.email} to Premium`);
+
+                            // Log audit
+                            await logChange({
+                                actorEmail: userEmail,
+                                actorName: user.name || 'User',
+                                actorRole: 'user',
+                                targetType: 'user',
+                                targetId: user._id.toString(),
+                                targetOwnerEmail: userEmail,
+                                action: 'payment-success-verify',
+                                summary: 'User upgraded to Premium via verification',
+                                metadata: { sessionId, amount: payment.amount }
+                            });
+                        } else {
+                            console.log(`[VerifyPayment] User ${user.email} was already Premium`);
+                        }
+                    } else {
+                        console.error('[VerifyPayment] User not found during upgrade');
                     }
                 }
             } catch (stripeError) {
-                console.error('Stripe Verification Error:', stripeError);
-                // Continue to return current state if stripe fails
+                console.error('[VerifyPayment] Stripe Verification Error:', stripeError);
             }
         }
 
-        // Refetch user to get latest status
-        const updatedUser = await User.findOne({ email: userEmail });
+        // Final check
         const finalPayment = await Payment.findOne({ stripeSessionId: sessionId });
+        const updatedUser = await User.findById(req.user._id); // Check the *current* user's status
+
+        console.log(`[VerifyPayment] Final check - Payment: ${finalPayment?.status}, IsPremium: ${updatedUser?.isPremium}`);
 
         res.json({
             success: finalPayment?.status === 'completed',
             isPremium: !!updatedUser?.isPremium
         });
     } catch (error) {
-        console.error('Verification generic error:', error);
+        console.error('[VerifyPayment] Generic Error:', error);
         res.status(500).json({ message: 'Verification failed' });
     }
-}
+};
