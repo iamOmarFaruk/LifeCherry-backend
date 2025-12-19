@@ -14,10 +14,14 @@ const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const sanitizeHtml = require('sanitize-html');
 const hpp = require('hpp');
-
 const app = express();
 const PORT = process.env.PORT || 5050;
-const allowedOrigins = [process.env.CLIENT_URL].filter(Boolean);
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'https://life-cherry-frontend.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:5174'
+].filter(Boolean);
 
 const connectDB = async () => {
   if (mongoose.connection.readyState >= 1) {
@@ -82,7 +86,15 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : '*', credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    // Allow any origin for now to fix deployment issues
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(hpp());
 
 // Custom middleware to capture raw body for Stripe webhook
