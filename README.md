@@ -88,11 +88,4 @@ React • Node.js • MongoDB • Laravel • CI/CD Pipelines • Cloud Infrastr
 > [!IMPORTANT]
 > This backend is designed for high-availability environments and follows industry-standard security protocols to protect user data and financial information.
 
-/*
- * ┌── o m a r ──┐
- * │ @iamOmarFaruk
- * │ omarfaruk.dev
- * │ Created: 2025-12-19
- * │ Updated: 2025-12-19
- * └─ LifeCherry ───┘
- */
+

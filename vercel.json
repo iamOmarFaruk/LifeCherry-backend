@@ -1,5 +1,10 @@
 {
     "version": 2,
+    "git": {
+        "deploymentEnabled": {
+            "main": true
+        }
+    },
     "builds": [
         {
             "src": "index.js",
@@ -11,5 +16,6 @@
             "src": "/(.*)",
             "dest": "/index.js"
         }
-    ]
+    ],
+    "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" == \"main\" ]; then exit 1; else exit 0; fi"
 }
