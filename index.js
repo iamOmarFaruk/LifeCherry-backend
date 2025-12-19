@@ -116,28 +116,49 @@ app.use('/api', reportRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', paymentRoutes);
 
-const startServer = async () => {
-  try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI is not set in the environment');
-    }
+const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
 
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is not set in the environment');
+  }
+
+  try {
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 10000,
     });
-
-
-    app.listen(PORT, () => {
-    });
+    console.log('MongoDB Connected');
   } catch (error) {
     console.error(
       'Failed to connect to MongoDB. Verify MONGODB_URI and that your current IP is whitelisted in Atlas.',
       error
     );
-    process.exit(1);
+    throw error;
   }
 };
 
-startServer();
+// Initialize DB connection for serverless
+connectDB().catch(console.error);
 
+// Export app for Verce
 module.exports = app;
+
+// Only start the server if running directly (dev/local mode)
+if (require.main === module) {
+  const startServer = async () => {
+    try {
+      await connectDB();
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+      });
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  };
+
+  startServer();
+}
+
