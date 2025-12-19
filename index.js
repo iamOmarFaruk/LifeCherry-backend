@@ -19,6 +19,35 @@ const app = express();
 const PORT = process.env.PORT || 5050;
 const allowedOrigins = [process.env.CLIENT_URL].filter(Boolean);
 
+const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is not set in the environment');
+  }
+
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
+    console.log('MongoDB Connected');
+  } catch (error) {
+    console.error(
+      'Failed to connect to MongoDB. Verify MONGODB_URI and that your current IP is whitelisted in Atlas.',
+      error
+    );
+    throw error;
+  }
+};
+
+// Middleware to ensure DB connection before handling requests
+app.use(async (req, res, next) => {
+  await connectDB();
+  next();
+});
+
 const sanitizePayload = (obj) => {
   if (!obj || typeof obj !== 'object') return;
   Object.keys(obj).forEach((key) => {
@@ -116,31 +145,10 @@ app.use('/api', reportRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', paymentRoutes);
 
-const connectDB = async () => {
-  if (mongoose.connection.readyState >= 1) {
-    return;
-  }
 
-  if (!process.env.MONGODB_URI) {
-    throw new Error('MONGODB_URI is not set in the environment');
-  }
-
-  try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
-    });
-    console.log('MongoDB Connected');
-  } catch (error) {
-    console.error(
-      'Failed to connect to MongoDB. Verify MONGODB_URI and that your current IP is whitelisted in Atlas.',
-      error
-    );
-    throw error;
-  }
-};
 
 // Initialize DB connection for serverless
-connectDB().catch(console.error);
+
 
 // Export app for Verce
 module.exports = app;
