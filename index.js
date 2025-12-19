@@ -46,11 +46,7 @@ const connectDB = async () => {
   }
 };
 
-// Middleware to ensure DB connection before handling requests
-app.use(async (req, res, next) => {
-  await connectDB();
-  next();
-});
+
 
 const sanitizePayload = (obj) => {
   if (!obj || typeof obj !== 'object') return;
@@ -96,6 +92,12 @@ app.use(cors({
   credentials: true
 }));
 app.use(hpp());
+
+// Middleware to ensure DB connection before handling requests
+app.use(async (req, res, next) => {
+  await connectDB();
+  next();
+});
 
 // Custom middleware to capture raw body for Stripe webhook
 app.use((req, res, next) => {
